@@ -436,7 +436,7 @@ int clusterProcessPacket(clusterLink *link) {
     if (ntohs(hdr->ver) != 0) return 1; /* Can't handle versions other than 0.*/
     if (totlen > sdslen(link->rcvbuf)) return 1;
 
-    if (type == CLUSTERMSG_TYPE_VOTEREQUEST) {
+    if (type == CLUSTERMSG_TYPE_VOTEREQUEST) { // 处理投票请求
         uint32_t explen;
         explen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
         explen += sizeof(clusterMsgDataRequestVote);
@@ -450,7 +450,8 @@ int clusterProcessPacket(clusterLink *link) {
                 hdr->data.requestvote.vote.last_log_term);
 
         clusterProcessRequestVote(link, hdr->data.requestvote.vote);
-    } else if (type == CLUSTERMSG_TYPE_APPENDENTRIES) {
+
+    } else if (type == CLUSTERMSG_TYPE_APPENDENTRIES) { // 添加日志请求
         uint32_t explen;
         explen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
         explen += (sizeof(clusterMsgDataAppendEntries) -
@@ -470,7 +471,8 @@ int clusterProcessPacket(clusterLink *link) {
                 hdr->data.appendentries.entries.leader_commit_index);
 
         clusterProcessAppendEntries(link, hdr->data.appendentries.entries);
-    } else if (type == CLUSTERMSG_TYPE_VOTEREQUEST_RESP) {
+
+    } else if (type == CLUSTERMSG_TYPE_VOTEREQUEST_RESP) { // 回复添加投票结果请求
         uint32_t explen;
         explen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
         explen += sizeof(clusterMsgDataResponseVote);
@@ -483,7 +485,8 @@ int clusterProcessPacket(clusterLink *link) {
                 hdr->data.responsevote.vote.term,
                 hdr->data.responsevote.vote.vote_granted);
         clusterProcessResponseVote(link, hdr->data.responsevote.vote);
-    } else if (type == CLUSTERMSG_TYPE_APPENDENTRIES_RESP) {
+        
+    } else if (type == CLUSTERMSG_TYPE_APPENDENTRIES_RESP) { // 回复添加日志请求
         uint32_t explen;
         explen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
         explen += sizeof(clusterMsgDataResponseAppendEntries);
@@ -862,6 +865,7 @@ void clusterSendResponseAppendEntries(clusterLink *link, int ok) {
     clusterSendMessage(link,buf,ntohl(hdr->totlen));
 }
 
+// 发送心跳给follower
 void clusterSendAppendEntries(clusterLink *link) {
     unsigned char buf[sizeof(clusterMsg)];
     clusterMsg *hdr =  (clusterMsg*) buf;
@@ -871,9 +875,12 @@ void clusterSendAppendEntries(clusterLink *link) {
     int logcount = 0, totlen;
 
     clusterBuildMessageHdr(hdr, CLUSTERMSG_TYPE_APPENDENTRIES);
+    // 当前leader的期限
     hdr->data.appendentries.entries.term = server.cluster->current_term;
+    // leader的名字
     memcpy(hdr->data.appendentries.entries.leaderid, myself->name,
             PREZ_CLUSTER_NAMELEN);
+    // 当前follower最后更新的日志index
     hdr->data.appendentries.entries.prev_log_index = node->next_index-1;
     hdr->data.appendentries.entries.prev_log_term = logGetTerm(node->next_index-1);
     hdr->data.appendentries.entries.leader_commit_index =
@@ -1072,7 +1079,7 @@ void clusterCron(void) {
             if (node->link == NULL) continue;
 
             if (mstime() - node->last_activity_time >
-                    server.cluster->heartbeat_interval) {
+                    server.cluster->heartbeat_interval) { // 如果到达发生心跳的时候
                 node->last_activity_time = mstime();
                 clusterSendHeartbeat(node->link); // 发送心跳包给从节点
             }
