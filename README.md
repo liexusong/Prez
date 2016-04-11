@@ -1,4 +1,4 @@
-# Prez
+# Prez (使用Raft协议实现的集群版Redis)
 
 Prez is a distributed system that provides highly reliable, consistent store. It enables reliable distributed coordination. Prez is motivated by systems like [Apache Zookeeper][zookeeper] and [etcd][etcd]. It is written in C and uses [Raft][raft] consensus algorithm internally for replicated state machine.
 
