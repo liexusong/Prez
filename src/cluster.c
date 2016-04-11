@@ -1,7 +1,7 @@
 /* Prez Cluster implementation.
  * Copyright(C) 2014 Sureshkumar Nedunchezhian. All rights reserved.
  *
- */ 
+ */
 
 /*
  * Copyright (c) 2009-2012, Salvatore Sanfilippo <antirez at gmail dot com>
@@ -164,8 +164,8 @@ void initClusterConfig(void) {
 
 void clusterInit(void) {
 
-    server.cluster->nodes = dictCreate(&clusterNodesDictType,NULL);
-    server.cluster->state = PREZ_FOLLOWER;
+    server.cluster->nodes = dictCreate(&clusterNodesDictType,NULL); // 保存所有节点
+    server.cluster->state = PREZ_FOLLOWER; // 开始只能是跟随者
     server.cluster->leader = sdsempty();
     server.cluster->voted_for = sdsempty();
     server.cluster->synced_nodes = dictCreate(&clusterNodesDictType,NULL);
@@ -175,6 +175,7 @@ void clusterInit(void) {
     server.cluster->commit_index = 0;
     server.cluster->last_applied = 0;
     server.cluster->votes_granted = 0;
+
     server.cluster->log_filename = zstrdup(PREZ_DEFAULT_LOG_FILENAME);
     server.cluster->log_entries = listCreate();
     server.cluster->log_max_entries_per_request = PREZ_LOG_MAX_ENTRIES_PER_REQUEST;
@@ -195,8 +196,8 @@ void clusterInit(void) {
     /* We need a listening TCP port for our cluster messaging needs. */
     server.cfd_count = 0;
 
-    if (listenToPort(server.cport,
-                server.cfd,&server.cfd_count) == PREZ_ERR)
+    if (listenToPort(server.cport, server.cfd,&server.cfd_count)
+        == PREZ_ERR)
     {
         exit(1);
     } else {
@@ -499,7 +500,7 @@ int clusterProcessPacket(clusterLink *link) {
         clusterProcessResponseAppendEntries(link,
                 hdr->data.responseappendentries.entries);
     }
-    
+
     return 1;
 }
 
@@ -680,7 +681,7 @@ void clusterProcessRequestVote(clusterLink *link, clusterMsgDataRequestVote vote
         server.cluster->current_term = vote.term;
         server.cluster->leader = sdsempty();
         server.cluster->voted_for = sdsempty();
-    } else if (sdslen(server.cluster->voted_for) > 0 && 
+    } else if (sdslen(server.cluster->voted_for) > 0 &&
             sdscmp(server.cluster->voted_for, candidateid)) {
         prezLog(PREZ_DEBUG, "RV Recv Req: Deny Vote, Dup vote request."
                 "Already voted for %s",
@@ -729,7 +730,7 @@ void clusterProcessResponseVote(clusterLink *link,
     }
 }
 
-void clusterProcessAppendEntries(clusterLink *link, 
+void clusterProcessAppendEntries(clusterLink *link,
         clusterMsgDataAppendEntries entries) {
 
     if (entries.term < server.cluster->current_term) {
@@ -772,7 +773,7 @@ void clusterProcessAppendEntries(clusterLink *link,
     clusterSendResponseAppendEntries(link, PREZ_OK);
 }
 
-void clusterProcessResponseAppendEntries(clusterLink *link, 
+void clusterProcessResponseAppendEntries(clusterLink *link,
         clusterMsgDataResponseAppendEntries entries) {
     clusterNode *node = link->node;
 
@@ -808,7 +809,7 @@ void clusterSendRequestVote(void) {
     clusterBuildMessageHdr(hdr, CLUSTERMSG_TYPE_VOTEREQUEST);
     server.cluster->current_term++;
     hdr->data.requestvote.vote.term = server.cluster->current_term;
-    memcpy(hdr->data.requestvote.vote.candidateid, myself->name, 
+    memcpy(hdr->data.requestvote.vote.candidateid, myself->name,
             PREZ_CLUSTER_NAMELEN);
     hdr->data.requestvote.vote.last_log_index = last_log_index;
     hdr->data.requestvote.vote.last_log_term = last_log_term;
@@ -880,9 +881,9 @@ void clusterSendAppendEntries(clusterLink *link) {
         ln = getLogNode(node->next_index);
         while(ln && logcount < server.cluster->log_max_entries_per_request) {
             le_node = listNodeValue(ln);
-            hdr->data.appendentries.entries.log_entries[logcount].term = 
+            hdr->data.appendentries.entries.log_entries[logcount].term =
                 le_node->log_entry.term;
-            hdr->data.appendentries.entries.log_entries[logcount].index = 
+            hdr->data.appendentries.entries.log_entries[logcount].index =
                 le_node->log_entry.index;
             memcpy(hdr->data.appendentries.entries.log_entries[logcount].commandName,
                     le_node->log_entry.commandName,
@@ -945,7 +946,8 @@ void clusterUpdateCommitIndex(void) {
     reverseIndices(log_indices,dictSize(server.cluster->nodes));
     commit_index = log_indices[quorumSize-1];
     if (commit_index > server.cluster->commit_index &&
-            server.cluster->current_term == logGetTerm(commit_index)) {
+        server.cluster->current_term == logGetTerm(commit_index))
+    {
         logSync();
         server.cluster->commit_index = commit_index;
         prezLog(PREZ_DEBUG, "Upd cmtidx: %lld",
@@ -976,7 +978,7 @@ void clusterCron(void) {
         clusterNode *node = dictGetVal(de);
 
         if (node->flags & (PREZ_NODE_MYSELF|PREZ_NODE_NOADDR)) continue;
-        if (node->link == NULL) {
+        if (node->link == NULL) { // 连接所有节点
             int fd;
             clusterLink *link;
 
@@ -1009,10 +1011,11 @@ void clusterCron(void) {
     }
 
     election_timeout = server.cluster->election_timeout + /* Fixed delay. */
-        random() % server.cluster->election_timeout; /* Random delay between 0 
+        random() % server.cluster->election_timeout; /* Random delay between 0
                                                         and election_timeout ms */
 
-    if (server.cluster->state != PREZ_LEADER && 
+    // 候选人定时器超时
+    if (server.cluster->state != PREZ_LEADER &&
             now - server.cluster->last_activity_time > election_timeout) {
         server.cluster->last_activity_time = mstime();
         prezLog(PREZ_NOTICE, "Changing State to Candidate, term: %lld",
@@ -1032,7 +1035,7 @@ void clusterCron(void) {
 
     /* Candidate */
     if (server.cluster->state == PREZ_CANDIDATE) {
-        if (server.cluster->votes_granted >= quorumSize) {
+        if (server.cluster->votes_granted >= quorumSize) { // 如果超过一半的节点投票, 那么成为leader
             prezLog(PREZ_DEBUG, "nodes/quorum: %lu/%lu, "
                     "Changing State to Leader",
                     dictSize(server.cluster->nodes), quorumSize);
@@ -1044,7 +1047,7 @@ void clusterCron(void) {
             last_log_index = logCurrentIndex();
 
             di = dictGetSafeIterator(server.cluster->nodes);
-            while((de = dictNext(di)) != NULL) {
+            while((de = dictNext(di)) != NULL) { // 更新所以从节点信息
                 clusterNode *node = dictGetVal(de);
 
                 if (node->flags & (PREZ_NODE_MYSELF|PREZ_NODE_NOADDR)) continue;
@@ -1065,10 +1068,10 @@ void clusterCron(void) {
             if (node->flags & (PREZ_NODE_MYSELF|PREZ_NODE_NOADDR)) continue;
             if (node->link == NULL) continue;
 
-            if (mstime() - node->last_activity_time > 
+            if (mstime() - node->last_activity_time >
                     server.cluster->heartbeat_interval) {
                 node->last_activity_time = mstime();
-                clusterSendHeartbeat(node->link);
+                clusterSendHeartbeat(node->link); // 发送心跳包给从节点
             }
         }
         dictReleaseIterator(di);
