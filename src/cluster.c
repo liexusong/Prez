@@ -664,6 +664,7 @@ void clusterBuildMessageHdr(clusterMsg *hdr, int type) {
     /* For CLUSTERMSG_TYPE_APPENDENTRIES, fixing the totlen field is up to the caller. */
 }
 
+// 接收到candidate的投票请求
 void clusterProcessRequestVote(clusterLink *link, clusterMsgDataRequestVote vote) {
     sds candidateid = sdsnew(vote.candidateid);
     long long last_log_index, last_log_term;
@@ -674,13 +675,14 @@ void clusterProcessRequestVote(clusterLink *link, clusterMsgDataRequestVote vote
         goto deny_vote;
     }
 
-    if (vote.term > server.cluster->current_term) {
+    if (vote.term > server.cluster->current_term) { // 如果投票的周期比服务器周期要大
         prezLog(PREZ_DEBUG, "RV Recv Req: Update term to: %lld",
                 vote.term);
         server.cluster->state = PREZ_FOLLOWER;
         server.cluster->current_term = vote.term;
         server.cluster->leader = sdsempty();
         server.cluster->voted_for = sdsempty();
+
     } else if (sdslen(server.cluster->voted_for) > 0 &&
             sdscmp(server.cluster->voted_for, candidateid)) {
         prezLog(PREZ_DEBUG, "RV Recv Req: Deny Vote, Dup vote request."
@@ -829,6 +831,7 @@ void clusterSendResponseVote(clusterLink *link, int vote_granted) {
 
     hdr->data.responsevote.vote.term = server.cluster->current_term;
     hdr->data.responsevote.vote.vote_granted = vote_granted;
+
     clusterSendMessage(link,buf,ntohl(hdr->totlen));
 }
 
